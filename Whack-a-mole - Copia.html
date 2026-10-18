@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Acerte a Cara</title>
+    <style>
+        body {
+            margin: 0;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-image: url("imagens/Isadora.feia.jpeg");
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            font-family: Arial, sans-serif;
+        }
+
+        .jogo-area {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 15px;
+            padding: 20px;
+            background-color: rgba(0, 0, 0, 0.5);
+            border-radius: 20px;
+        }
+
+        h1 {
+            color: white;
+            margin: 0;
+        }
+
+        .niveis {
+            display: flex;
+            gap: 10px;
+        }
+
+        .nivel {
+            width: 100px;
+            height: 40px;
+            font-size: 16px;
+            border: 3px solid transparent;
+            border-radius: 12px;
+            background-color: red;
+            color: pink;
+            cursor: pointer;
+        }
+
+        .nivel.escolhido {
+            border-color: white;
+            background-color: darkred;
+        }
+
+        .placar {
+            display: flex;
+            gap: 30px;
+            color: white;
+            font-size: 20px;
+        }
+
+        .tabuleiro {
+            display: grid;
+            gap: 15px;
+        }
+
+        .buraco {
+            width: 100px;
+            height: 100px;
+            background-color: #4b2e1a;
+            border-radius: 20px;
+            overflow: hidden;
+            cursor: pointer;
+        }
+
+        .buraco img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+            transform: translateY(100%);
+            transition: transform 0.15s;
+            pointer-events: none;
+        }
+
+        .buraco.ativo img {
+            transform: translateY(0);
+        }
+
+        #iniciar, .voltar {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            width: 200px;
+            height: 50px;
+            font-size: 20px;
+            border: none;
+            border-radius: 15px;
+            background-color: red;
+            color: pink;
+            cursor: pointer;
+            text-decoration: none;
+        }
+
+        #iniciar:hover, .voltar:hover {
+            background-color: darkred;
+        }
+
+        #iniciar:disabled {
+            background-color: gray;
+            cursor: default;
+        }
+    </style>
+</head>
+<body>
+    <div class="jogo-area">
+        <h1>Acerte a cara!</h1>
+
+        <div class="niveis">
+            <button type="button" class="nivel escolhido" data-nivel="facil">Fácil</button>
+            <button type="button" class="nivel" data-nivel="medio">Médio</button>
+            <button type="button" class="nivel" data-nivel="dificil">Difícil</button>
+        </div>
+
+        <div class="placar">
+            <span>Pontos: <b id="pontos">0</b></span>
+            <span>Tempo: <b id="tempo">30</b></span>
+        </div>
+
+        <div class="tabuleiro" id="tabuleiro"></div>
+
+        <button type="button" id="iniciar">Começar</button>
+        <a class="voltar" href="pg2.html">Voltar</a>
+    </div>
+
+    <script>
+        const niveis = {
+            facil:   { buracos: 9,  colunas: 3, velocidade: 1000 },
+            medio:   { buracos: 12, colunas: 4, velocidade: 700 },
+            dificil: { buracos: 16, colunas: 4, velocidade: 450 }
+        };
+
+        const tabuleiro = document.getElementById("tabuleiro");
+        const pontosEl = document.getElementById("pontos");
+        const tempoEl = document.getElementById("tempo");
+        const botao = document.getElementById("iniciar");
+        const botoesNivel = document.querySelectorAll(".nivel");
+
+        let nivelAtual = "facil";
+        let buracos = [];
+        let pontos = 0;
+        let tempo = 30;
+        let buracoAtual = null;
+        let jogando = false;
+        let timerJogo;
+        let timerCara;
+
+        function criarTabuleiro() {
+            const config = niveis[nivelAtual];
+            tabuleiro.innerHTML = "";
+            tabuleiro.style.gridTemplateColumns = "repeat(" + config.colunas + ", 100px)";
+
+            for (let i = 0; i < config.buracos; i++) {
+                const buraco = document.createElement("div");
+                buraco.className = "buraco";
+                buraco.innerHTML = '<img src="imagens/isadora sem fundo.png" alt="">';
+
+                buraco.addEventListener("click", function () {
+                    if (!jogando) return;
+                    if (buraco.classList.contains("ativo")) {
+                        pontos++;
+                        pontosEl.textContent = pontos;
+                        buraco.classList.remove("ativo");
+                    }
+                });
+
+                tabuleiro.appendChild(buraco);
+            }
+
+            buracos = tabuleiro.querySelectorAll(".buraco");
+        }
+
+        function sortearBuraco() {
+            if (buracoAtual) {
+                buracoAtual.classList.remove("ativo");
+            }
+            let novo;
+            do {
+                novo = buracos[Math.floor(Math.random() * buracos.length)];
+            } while (novo === buracoAtual);
+
+            novo.classList.add("ativo");
+            buracoAtual = novo;
+        }
+
+        botoesNivel.forEach(function (b) {
+            b.addEventListener("click", function () {
+                if (jogando) return;
+                nivelAtual = b.dataset.nivel;
+                botoesNivel.forEach(function (x) {
+                    x.classList.remove("escolhido");
+                });
+                b.classList.add("escolhido");
+                criarTabuleiro();
+            });
+        });
+
+        function iniciar() {
+            pontos = 0;
+            tempo = 30;
+            pontosEl.textContent = pontos;
+            tempoEl.textContent = tempo;
+            jogando = true;
+            botao.disabled = true;
+
+            sortearBuraco();
+            timerCara = setInterval(sortearBuraco, niveis[nivelAtual].velocidade);
+            timerJogo = setInterval(function () {
+                tempo--;
+                tempoEl.textContent = tempo;
+                if (tempo <= 0) {
+                    fim();
+                }
+            }, 1000);
+        }
+
+        function fim() {
+            clearInterval(timerCara);
+            clearInterval(timerJogo);
+            jogando = false;
+            if (buracoAtual) {
+                buracoAtual.classList.remove("ativo");
+                buracoAtual = null;
+            }
+            botao.disabled = false;
+            botao.textContent = "Jogar de novo";
+            alert("Fim de jogo! Você fez " + pontos + " pontos.");
+        }
+
+        botao.addEventListener("click", iniciar);
+        criarTabuleiro();
+    </script>
+</body>
+</html>

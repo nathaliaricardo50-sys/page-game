@@ -1,0 +1,58 @@
+body {
+    margin: 0;
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background-image: url("imagens/Isadora.feia.jpeg");
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+}
+
+.mini-jogos {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    padding: 20px;
+    width: 500px;
+    max-width: 100%;
+}
+
+.jogo {
+    display: block;
+    border-radius: 15px;
+    overflow: hidden;
+    background-color: rgba(0, 0, 0, 0.4);
+}
+
+.jogo img {
+    width: 100%;
+    height: 100%;
+    display: block;
+    object-fit: cover;
+}
+
+.jogo:hover {
+    transform: scale(1.05);
+}
+.voltar {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 200px;
+    height: 60px;
+    font-size: 20px;
+    border-radius: 15px;
+    background-color: red;
+    color: pink;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.voltar:hover {
+    background-color: darkred;
+}

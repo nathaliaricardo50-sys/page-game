@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Opções</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .painel {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+            width: 320px;
+            padding: 25px;
+            background-color: rgba(0, 0, 0, 0.6);
+            border-radius: 20px;
+        }
+
+        .opcao {
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            color: white;
+            font-size: 18px;
+        }
+
+        .linha {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .opcao button {
+            width: 100%;
+            height: 45px;
+            font-size: 18px;
+        }
+
+        input[type="range"] {
+            width: 100%;
+            cursor: pointer;
+        }
+
+        .aviso {
+            min-height: 20px;
+            font-size: 14px;
+            color: #ffd54f;
+        }
+
+        .voltar {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="painel">
+        <h1>Opções</h1>
+
+        <div class="opcao">
+            <span>Música</span>
+            <button type="button" id="botaoMusica">Ligada</button>
+        </div>
+
+        <div class="opcao">
+            <div class="linha">
+                <span>Volume</span>
+                <span id="volumeTexto">50%</span>
+            </div>
+            <input type="range" id="volume" min="0" max="100" value="50">
+        </div>
+
+        <div class="opcao">
+            <span>Recordes</span>
+            <button type="button" id="botaoApagar">Apagar recordes</button>
+        </div>
+
+        <p class="aviso" id="aviso"></p>
+    </div>
+
+    <a class="botao voltar" href="pg.html">Voltar</a>
+
+    <script>
+        const botaoMusica = document.getElementById("botaoMusica");
+        const volumeEl = document.getElementById("volume");
+        const volumeTexto = document.getElementById("volumeTexto");
+        const botaoApagar = document.getElementById("botaoApagar");
+        const aviso = document.getElementById("aviso");
+
+        function ler(chave, padrao) {
+            try {
+                const valor = localStorage.getItem(chave);
+                return valor === null ? padrao : valor;
+            } catch (e) {
+                return padrao;
+            }
+        }
+
+        function salvar(chave, valor) {
+            try {
+                localStorage.setItem(chave, valor);
+            } catch (e) {}
+        }
+
+        let musicaLigada = ler("musicaLigada", "1") === "1";
+
+        function atualizarBotaoMusica() {
+            botaoMusica.textContent = musicaLigada ? "Ligada" : "Desligada";
+        }
+
+        // carrega o que já estava salvo
+        volumeEl.value = ler("volumeMusica", "50");
+        volumeTexto.textContent = volumeEl.value + "%";
+        atualizarBotaoMusica();
+
+        botaoMusica.addEventListener("click", function () {
+            musicaLigada = !musicaLigada;
+            salvar("musicaLigada", musicaLigada ? "1" : "0");
+            atualizarBotaoMusica();
+            aviso.textContent = "Salvo!";
+        });
+
+        volumeEl.addEventListener("input", function () {
+            volumeTexto.textContent = volumeEl.value + "%";
+            salvar("volumeMusica", volumeEl.value);
+            aviso.textContent = "Salvo!";
+        });
+
+        botaoApagar.addEventListener("click", function () {
+            if (!confirm("Apagar todos os recordes dos jogos?")) return;
+            try {
+                localStorage.removeItem("recordeCobrinha");
+                localStorage.removeItem("recordeVoaCara");
+                localStorage.removeItem("recordeChuvaCaras");
+            } catch (e) {}
+            aviso.textContent = "Recordes apagados!";
+        });
+    </script>
+</body>
+</html>

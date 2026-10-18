@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chuva de Caras</title>
+    <style>
+        body {
+            margin: 0;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-image: url("imagens/Isadora.feia.jpeg");
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            font-family: Arial, sans-serif;
+        }
+
+        .jogo-area {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+            padding: 20px;
+            background-color: rgba(0, 0, 0, 0.6);
+            border-radius: 20px;
+        }
+
+        h1 {
+            color: white;
+            margin: 0;
+        }
+
+        .niveis {
+            display: flex;
+            gap: 10px;
+        }
+
+        .nivel {
+            width: 100px;
+            height: 40px;
+            font-size: 16px;
+            border: 3px solid transparent;
+            border-radius: 12px;
+            background-color: red;
+            color: pink;
+            cursor: pointer;
+        }
+
+        .nivel.escolhido {
+            border-color: white;
+            background-color: darkred;
+        }
+
+        .placar {
+            display: flex;
+            gap: 30px;
+            color: white;
+            font-size: 20px;
+        }
+
+        canvas {
+            background-color: #87ceeb;
+            border: 4px solid white;
+            border-radius: 10px;
+            cursor: none;
+            touch-action: none;
+        }
+
+        #iniciar, .voltar {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            width: 200px;
+            height: 50px;
+            font-size: 20px;
+            border: none;
+            border-radius: 15px;
+            background-color: red;
+            color: pink;
+            cursor: pointer;
+            text-decoration: none;
+        }
+
+        #iniciar:hover, .voltar:hover {
+            background-color: darkred;
+        }
+
+        #iniciar:disabled {
+            background-color: gray;
+            cursor: default;
+        }
+
+        .dica {
+            color: white;
+            font-size: 14px;
+            margin: 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="jogo-area">
+        <h1>Chuva de Caras</h1>
+
+        <div class="niveis">
+            <button type="button" class="nivel escolhido" data-nivel="facil">Fácil</button>
+            <button type="button" class="nivel" data-nivel="medio">Médio</button>
+            <button type="button" class="nivel" data-nivel="dificil">Difícil</button>
+        </div>
+
+        <div class="placar">
+            <span>Pontos: <b id="pontos">0</b></span>
+            <span>Recorde: <b id="recorde">0</b></span>
+        </div>
+
+        <canvas id="tela" width="400" height="500"></canvas>
+
+        <button type="button" id="iniciar">Começar</button>
+        <p class="dica">Mova a cesta com o mouse, o dedo, as setas ou A e D</p>
+        <a class="voltar" href="pg2.html">Voltar</a>
+    </div>
+
+    <script>
+        const canvas = document.getElementById("tela");
+        const ctx = canvas.getContext("2d");
+        const pontosEl = document.getElementById("pontos");
+        const recordeEl = document.getElementById("recorde");
+        const botao = document.getElementById("iniciar");
+        const botoesNivel = document.querySelectorAll(".nivel");
+
+        const LARGURA = 400;
+        const ALTURA = 500;
+
+        // deixa o desenho nítido em telas de alta resolução
+        const dpr = window.devicePixelRatio || 1;
+        canvas.width = LARGURA * dpr;
+        canvas.height = ALTURA * dpr;
+        canvas.style.width = LARGURA + "px";
+        canvas.style.height = ALTURA + "px";
+        ctx.scale(dpr, dpr);
+        ctx.imageSmoothingQuality = "high";
+
+        // Tamanho da cara que cai (em pixels)
+        const TAMANHO_CARA = 55;
+
+        // Foto da cara que cai (a mesma da cabeça da cobrinha)
+        const fotoCara = new Image();
+        fotoCara.src = "imagens/Rosto Surpreso em Recorte sticker (1).png";
+
+        // Configuração de cada nível
+        const niveis = {
+            facil:   { velMin: 2.0, velMax: 3.2, intervalo: 70, vidas: 5 },
+            medio:   { velMin: 3.0, velMax: 4.5, intervalo: 55, vidas: 3 },
+            dificil: { velMin: 4.0, velMax: 6.0, intervalo: 40, vidas: 3 }
+        };
+
+        const CESTA_LARGURA = 90;
+        const CESTA_ALTURA = 30;
+        const CESTA_VELOCIDADE = 6;
+
+        let nivelAtual = "facil";
+        let cesta, caras, quadros, pontos, vidas;
+        let jogando = false;
+        let recorde = 0;
+        let ultimo = 0;
+        let acumulado = 0;
+        const PASSO = 1000 / 60;
+        const teclas = { esquerda: false, direita: false };
+
+        try {
+            recorde = Number(localStorage.getItem("recordeChuvaCaras")) || 0;
+        } catch (e) {}
+        recordeEl.textContent = recorde;
+
+        function reiniciarEstado() {
+            cesta = { x: LARGURA / 2, y: ALTURA - 55 };
+            caras = [];
+            quadros = 0;
+            pontos = 0;
+            vidas = niveis[nivelAtual].vidas;
+            pontosEl.textContent = pontos;
+        }
+
+        function limitarCesta() {
+            const metade = CESTA_LARGURA / 2;
+            cesta.x = Math.max(metade, Math.min(LARGURA - metade, cesta.x));
+        }
+
+        function criarCara() {
+            const config = niveis[nivelAtual];
+            const margem = TAMANHO_CARA / 2 + 5;
+            // a chuva fica um pouco mais rápida conforme você ganha pontos
+            const aceleracao = Math.min(1.6, 1 + pontos * 0.01);
+            const velocidade = (config.velMin + Math.random() * (config.velMax - config.velMin)) * aceleracao;
+
+            caras.push({
+                x: margem + Math.random() * (LARGURA - margem * 2),
+                y: -TAMANHO_CARA,
+                vy: velocidade,
+                angulo: Math.random() * Math.PI * 2,
+                giro: (Math.random() - 0.5) * 0.08
+            });
+        }
+
+        function atualizar() {
+            const config = niveis[nivelAtual];
+
+            if (teclas.esquerda) cesta.x -= CESTA_VELOCIDADE;
+            if (teclas.direita) cesta.x += CESTA_VELOCIDADE;
+            limitarCesta();
+
+            if (quadros % config.intervalo === 0) {
+                criarCara();
+            }
+            quadros++;
+
+            const raio = TAMANHO_CARA / 2;
+
+            caras = caras.filter(function (c) {
+                c.y += c.vy;
+                c.angulo += c.giro;
+
+                // pegou na cesta
+                const naAltura = c.y + raio >= cesta.y && c.y - raio <= cesta.y + CESTA_ALTURA;
+                const naLargura = Math.abs(c.x - cesta.x) < CESTA_LARGURA / 2 + raio * 0.4;
+                if (naAltura && naLargura) {
+                    pontos++;
+                    pontosEl.textContent = pontos;
+                    return false;
+                }
+
+                // caiu no chão
+                if (c.y - raio > ALTURA) {
+                    vidas--;
+                    return false;
+                }
+
+                return true;
+            });
+
+            if (vidas <= 0) {
+                fim();
+            }
+        }
+
+        function desenharCesta() {
+            const x = cesta.x - CESTA_LARGURA / 2;
+            const y = cesta.y;
+
+            ctx.fillStyle = "#8d5524";
+            ctx.beginPath();
+            ctx.moveTo(x, y);
+            ctx.lineTo(x + CESTA_LARGURA, y);
+            ctx.lineTo(x + CESTA_LARGURA - 10, y + CESTA_ALTURA);
+            ctx.lineTo(x + 10, y + CESTA_ALTURA);
+            ctx.closePath();
+            ctx.fill();
+
+            ctx.strokeStyle = "#4e2a0c";
+            ctx.lineWidth = 3;
+            ctx.stroke();
+
+            // listras da cesta
+            ctx.strokeStyle = "#c68642";
+            ctx.lineWidth = 2;
+            for (let i = 1; i < 4; i++) {
+                const lx = x + (CESTA_LARGURA / 4) * i;
+                ctx.beginPath();
+                ctx.moveTo(lx, y + 4);
+                ctx.lineTo(lx, y + CESTA_ALTURA - 4);
+                ctx.stroke();
+            }
+        }
+
+        function desenhar() {
+            ctx.clearRect(0, 0, LARGURA, ALTURA);
+
+            // caras que estão caindo
+            caras.forEach(function (c) {
+                ctx.save();
+                ctx.translate(c.x, c.y);
+                ctx.rotate(c.angulo);
+
+                if (fotoCara.complete && fotoCara.naturalWidth > 0) {
+                    ctx.drawImage(fotoCara, -TAMANHO_CARA / 2, -TAMANHO_CARA / 2, TAMANHO_CARA, TAMANHO_CARA);
+                } else {
+                    // se a foto não carregar, aparece uma bolinha amarela
+                    ctx.fillStyle = "#ffd54f";
+                    ctx.beginPath();
+                    ctx.arc(0, 0, TAMANHO_CARA / 2 - 4, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+
+                ctx.restore();
+            });
+
+            desenharCesta();
+
+            // vidas no canto de cima
+            ctx.fillStyle = "red";
+            ctx.strokeStyle = "white";
+            ctx.lineWidth = 3;
+            ctx.font = "bold 24px Arial";
+            ctx.textAlign = "left";
+            const coracoes = "♥".repeat(Math.max(0, vidas));
+            ctx.strokeText(coracoes, 12, 34);
+            ctx.fillText(coracoes, 12, 34);
+        }
+
+        function loop(agora) {
+            if (!jogando) return;
+
+            const delta = Math.min(agora - ultimo, 100);
+            ultimo = agora;
+            acumulado += delta;
+
+            while (acumulado >= PASSO && jogando) {
+                atualizar();
+                acumulado -= PASSO;
+            }
+
+            desenhar();
+
+            if (jogando) {
+                requestAnimationFrame(loop);
+            }
+        }
+
+        function iniciar() {
+            reiniciarEstado();
+            jogando = true;
+            botao.disabled = true;
+            acumulado = 0;
+            ultimo = performance.now();
+            requestAnimationFrame(loop);
+        }
+
+        function fim() {
+            if (!jogando) return;
+            jogando = false;
+            botao.disabled = false;
+            botao.textContent = "Jogar de novo";
+            desenhar();
+
+            if (pontos > recorde) {
+                recorde = pontos;
+                recordeEl.textContent = recorde;
+                try {
+                    localStorage.setItem("recordeChuvaCaras", recorde);
+                } catch (e) {}
+            }
+
+            alert("Fim de jogo! Você pegou " + pontos + " caras.");
+        }
+
+        // controles do teclado
+        document.addEventListener("keydown", function (e) {
+            const tecla = e.key.toLowerCase();
+            if (tecla === "arrowleft" || tecla === "a") {
+                teclas.esquerda = true;
+                e.preventDefault();
+            }
+            if (tecla === "arrowright" || tecla === "d") {
+                teclas.direita = true;
+                e.preventDefault();
+            }
+        });
+
+        document.addEventListener("keyup", function (e) {
+            const tecla = e.key.toLowerCase();
+            if (tecla === "arrowleft" || tecla === "a") teclas.esquerda = false;
+            if (tecla === "arrowright" || tecla === "d") teclas.direita = false;
+        });
+
+        // controles do mouse e do toque
+        function moverComPonteiro(clientX) {
+            if (!jogando) return;
+            const area = canvas.getBoundingClientRect();
+            cesta.x = (clientX - area.left) * (LARGURA / area.width);
+            limitarCesta();
+        }
+
+        canvas.addEventListener("mousemove", function (e) {
+            moverComPonteiro(e.clientX);
+        });
+
+        canvas.addEventListener("touchstart", function (e) {
+            e.preventDefault();
+            moverComPonteiro(e.touches[0].clientX);
+        }, { passive: false });
+
+        canvas.addEventListener("touchmove", function (e) {
+            e.preventDefault();
+            moverComPonteiro(e.touches[0].clientX);
+        }, { passive: false });
+
+        botoesNivel.forEach(function (b) {
+            b.addEventListener("click", function () {
+                if (jogando) return;
+                nivelAtual = b.dataset.nivel;
+                botoesNivel.forEach(function (x) {
+                    x.classList.remove("escolhido");
+                });
+                b.classList.add("escolhido");
+                reiniciarEstado();
+                desenhar();
+            });
+        });
+
+        botao.addEventListener("click", function () {
+            botao.blur();
+            iniciar();
+        });
+
+        // tela inicial
+        reiniciarEstado();
+        fotoCara.onload = desenhar;
+        desenhar();
+    </script>
+</body>
+</html>

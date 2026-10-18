@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cobrinha</title>
+    <style>
+        body {
+            margin: 0;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-image: url("imagens/Isadora.feia.jpeg");
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            font-family: Arial, sans-serif;
+        }
+
+        .jogo-area {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+            padding: 20px;
+            background-color: rgba(0, 0, 0, 0.6);
+            border-radius: 20px;
+        }
+
+        h1 {
+            color: white;
+            margin: 0;
+        }
+
+        .niveis {
+            display: flex;
+            gap: 10px;
+        }
+
+        .nivel {
+            width: 100px;
+            height: 40px;
+            font-size: 16px;
+            border: 3px solid transparent;
+            border-radius: 12px;
+            background-color: red;
+            color: pink;
+            cursor: pointer;
+        }
+
+        .nivel.escolhido {
+            border-color: white;
+            background-color: darkred;
+        }
+
+        .placar {
+            display: flex;
+            gap: 30px;
+            color: white;
+            font-size: 20px;
+        }
+
+        canvas {
+            background-color: #1b1b1b;
+            border: 4px solid white;
+            border-radius: 10px;
+        }
+
+        #iniciar, .voltar {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            width: 200px;
+            height: 50px;
+            font-size: 20px;
+            border: none;
+            border-radius: 15px;
+            background-color: red;
+            color: pink;
+            cursor: pointer;
+            text-decoration: none;
+        }
+
+        #iniciar:hover, .voltar:hover {
+            background-color: darkred;
+        }
+
+        .dica {
+            color: white;
+            font-size: 14px;
+            margin: 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="jogo-area">
+        <h1>Cobrinha</h1>
+
+        <div class="niveis">
+            <button type="button" class="nivel escolhido" data-velocidade="180">Fácil</button>
+            <button type="button" class="nivel" data-velocidade="120">Médio</button>
+            <button type="button" class="nivel" data-velocidade="70">Difícil</button>
+        </div>
+
+        <div class="placar">
+            <span>Pontos: <b id="pontos">0</b></span>
+            <span>Recorde: <b id="recorde">0</b></span>
+        </div>
+
+        <canvas id="tela" width="400" height="400"></canvas>
+
+        <button type="button" id="iniciar">Começar</button>
+        <p class="dica">Use as setas ou W A S D</p>
+        <a class="voltar" href="pg2.html">Voltar</a>
+    </div>
+
+    <script>
+        const canvas = document.getElementById("tela");
+        const ctx = canvas.getContext("2d");
+        const pontosEl = document.getElementById("pontos");
+        const recordeEl = document.getElementById("recorde");
+        const botao = document.getElementById("iniciar");
+        const botoesNivel = document.querySelectorAll(".nivel");
+
+        const TAM = 25;
+        const LARGURA = 400;
+        const CASAS = LARGURA / TAM;
+
+        const dpr = window.devicePixelRatio || 1;
+        canvas.width = LARGURA * dpr;
+        canvas.height = LARGURA * dpr;
+        canvas.style.width = LARGURA + "px";
+        canvas.style.height = LARGURA + "px";
+        ctx.scale(dpr, dpr);
+        ctx.imageSmoothingQuality = "high";
+
+        // Tamanho da cabeça: 1 = igual ao corpo, 2 = o dobro, 3 = o triplo
+        const ESCALA_CABECA = 2;
+
+        // Tamanho do celular: 1 = uma casinha, 1.6 = um pouco maior
+        const ESCALA_CELULAR = 1.6;
+
+        const fotoCabeca = new Image();
+        fotoCabeca.src = "imagens/Rosto Surpreso em Recorte sticker (1).png";
+
+        const fotoCelular = new Image();
+        fotoCelular.src = "imagens/Smartphone Motorola Rosa em Fundo Branco (1).png";
+
+        let cobra, direcao, proximaDirecao, comida, pontos;
+        let velocidade = 180;
+        let timer = null;
+        let jogando = false;
+        let recorde = 0;
+
+        try {
+            recorde = Number(localStorage.getItem("recordeCobrinha")) || 0;
+        } catch (e) {}
+        recordeEl.textContent = recorde;
+
+        function sortearComida() {
+            let nova;
+            do {
+                nova = {
+                    x: Math.floor(Math.random() * CASAS),
+                    y: Math.floor(Math.random() * CASAS)
+                };
+            } while (cobra.some(function (p) { return p.x === nova.x && p.y === nova.y; }));
+            comida = nova;
+        }
+
+        function desenharCelular(x, y) {
+            if (fotoCelular.complete && fotoCelular.naturalWidth > 0) {
+                const t = TAM * ESCALA_CELULAR;
+                const d = (t - TAM) / 2;
+                ctx.drawImage(fotoCelular, x * TAM - d, y * TAM - d, t, t);
+            } else {
+
+                ctx.fillStyle = "red";
+                ctx.beginPath();
+                ctx.arc(x * TAM + TAM / 2, y * TAM + TAM / 2, TAM / 2 - 2, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        function desenhar() {
+            ctx.clearRect(0, 0, LARGURA, LARGURA);
+
+            // comida (celular)
+            desenharCelular(comida.x, comida.y);
+
+            // corpo da cobra
+            cobra.forEach(function (parte, i) {
+                if (i === 0) return;
+                ctx.fillStyle = "#32CD32";
+                ctx.fillRect(parte.x * TAM + 1, parte.y * TAM + 1, TAM - 2, TAM - 2);
+            });
+
+            // cabeça (maior que o corpo, desenhada por último)
+            const cabeca = cobra[0];
+            if (fotoCabeca.complete && fotoCabeca.naturalWidth > 0) {
+                const tamCabeca = TAM * ESCALA_CABECA;
+                const desloc = (tamCabeca - TAM) / 2;
+                ctx.drawImage(
+                    fotoCabeca,
+                    cabeca.x * TAM - desloc,
+                    cabeca.y * TAM - desloc,
+                    tamCabeca,
+                    tamCabeca
+                );
+            } else {
+                ctx.fillStyle = "#7CFC00";
+                ctx.fillRect(cabeca.x * TAM + 1, cabeca.y * TAM + 1, TAM - 2, TAM - 2);
+            }
+        }
+
+        function passo() {
+            direcao = proximaDirecao;
+            const cabeca = {
+                x: cobra[0].x + direcao.x,
+                y: cobra[0].y + direcao.y
+            };
+
+            const bateuParede = cabeca.x < 0 || cabeca.y < 0 || cabeca.x >= CASAS || cabeca.y >= CASAS;
+            const bateuCorpo = cobra.some(function (p) { return p.x === cabeca.x && p.y === cabeca.y; });
+
+            if (bateuParede || bateuCorpo) {
+                fim();
+                return;
+            }
+
+            cobra.unshift(cabeca);
+
+            if (cabeca.x === comida.x && cabeca.y === comida.y) {
+                pontos++;
+                pontosEl.textContent = pontos;
+                sortearComida();
+            } else {
+                cobra.pop();
+            }
+
+            desenhar();
+        }
+
+        function criarCobra() {
+            return [
+                { x: 8, y: 8 },
+                { x: 7, y: 8 },
+                { x: 6, y: 8 }
+            ];
+        }
+
+        function iniciar() {
+            cobra = criarCobra();
+            direcao = { x: 1, y: 0 };
+            proximaDirecao = { x: 1, y: 0 };
+            pontos = 0;
+            pontosEl.textContent = pontos;
+            sortearComida();
+            desenhar();
+
+            jogando = true;
+            botao.disabled = true;
+            clearInterval(timer);
+            timer = setInterval(passo, velocidade);
+        }
+
+        function fim() {
+            clearInterval(timer);
+            jogando = false;
+            botao.disabled = false;
+            botao.textContent = "Jogar de novo";
+
+            if (pontos > recorde) {
+                recorde = pontos;
+                recordeEl.textContent = recorde;
+                try {
+                    localStorage.setItem("recordeCobrinha", recorde);
+                } catch (e) {}
+            }
+
+            alert("Fim de jogo! Você fez " + pontos + " pontos.");
+        }
+
+        document.addEventListener("keydown", function (e) {
+            if (!jogando) return;
+
+            const tecla = e.key.toLowerCase();
+            let nova = null;
+
+            if (tecla === "arrowup" || tecla === "w") nova = { x: 0, y: -1 };
+            if (tecla === "arrowdown" || tecla === "s") nova = { x: 0, y: 1 };
+            if (tecla === "arrowleft" || tecla === "a") nova = { x: -1, y: 0 };
+            if (tecla === "arrowright" || tecla === "d") nova = { x: 1, y: 0 };
+
+            if (nova) {
+                e.preventDefault();
+                // não deixa a cobra virar pra trás
+                if (nova.x !== -direcao.x || nova.y !== -direcao.y) {
+                    proximaDirecao = nova;
+                }
+            }
+        });
+
+        botoesNivel.forEach(function (b) {
+            b.addEventListener("click", function () {
+                if (jogando) return;
+                velocidade = Number(b.dataset.velocidade);
+                botoesNivel.forEach(function (x) {
+                    x.classList.remove("escolhido");
+                });
+                b.classList.add("escolhido");
+            });
+        });
+
+        botao.addEventListener("click", iniciar);
+
+        // tela inicial
+        cobra = criarCobra();
+        sortearComida();
+        fotoCabeca.onload = desenhar;
+        fotoCelular.onload = desenhar;
+        desenhar();
+    </script>
+</body>
+</html>

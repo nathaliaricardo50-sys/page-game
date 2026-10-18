@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Menu Isadora</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="menu">
+        <a class="botao" href="pg2.html">Jogar</a>
+        <a class="botao" href="opções.html">Opções</a>
+        <a class="botao" href="imagens/Tela de Créditos em Noite Estrelada.png">Créditos</a>
+        <a class="botao" href="sair.html">Sair</a>
+    </div>
+
+    <button type="button" id="som">🔊</button>
+
+    <audio id="musica" src="musica/Ariana_Grande_-_7_rings_(mp3.pm).mp3" loop></audio>
+
+    <script>
+        const musica = document.getElementById("musica");
+        const botaoSom = document.getElementById("som");
+
+        botaoSom.addEventListener("click", function () {
+            if (musica.paused) {
+                musica.play();
+                botaoSom.textContent = "🔊";
+            } else {
+                musica.pause();
+                botaoSom.textContent = "🔇";
+            }
+        });
+    </script>
+</body>
+</html>

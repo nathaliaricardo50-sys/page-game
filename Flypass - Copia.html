@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Voa Cara</title>
+    <style>
+        body {
+            margin: 0;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-image: url("imagens/Isadora.feia.jpeg");
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            font-family: Arial, sans-serif;
+        }
+
+        .jogo-area {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+            padding: 20px;
+            background-color: rgba(0, 0, 0, 0.6);
+            border-radius: 20px;
+        }
+
+        h1 {
+            color: white;
+            margin: 0;
+        }
+
+        .niveis {
+            display: flex;
+            gap: 10px;
+        }
+
+        .nivel {
+            width: 100px;
+            height: 40px;
+            font-size: 16px;
+            border: 3px solid transparent;
+            border-radius: 12px;
+            background-color: red;
+            color: pink;
+            cursor: pointer;
+        }
+
+        .nivel.escolhido {
+            border-color: white;
+            background-color: darkred;
+        }
+
+        .placar {
+            display: flex;
+            gap: 30px;
+            color: white;
+            font-size: 20px;
+        }
+
+        canvas {
+            background-color: #87ceeb;
+            border: 4px solid white;
+            border-radius: 10px;
+            cursor: pointer;
+            touch-action: manipulation;
+        }
+
+        #iniciar, .voltar {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            width: 200px;
+            height: 50px;
+            font-size: 20px;
+            border: none;
+            border-radius: 15px;
+            background-color: red;
+            color: pink;
+            cursor: pointer;
+            text-decoration: none;
+        }
+
+        #iniciar:hover, .voltar:hover {
+            background-color: darkred;
+        }
+
+        #iniciar:disabled {
+            background-color: gray;
+            cursor: default;
+        }
+
+        .dica {
+            color: white;
+            font-size: 14px;
+            margin: 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="jogo-area">
+        <h1>Voa Cara</h1>
+
+        <div class="niveis">
+            <button type="button" class="nivel escolhido" data-nivel="facil">Fácil</button>
+            <button type="button" class="nivel" data-nivel="medio">Médio</button>
+            <button type="button" class="nivel" data-nivel="dificil">Difícil</button>
+        </div>
+
+        <div class="placar">
+            <span>Pontos: <b id="pontos">0</b></span>
+            <span>Recorde: <b id="recorde">0</b></span>
+        </div>
+
+        <canvas id="tela" width="400" height="500"></canvas>
+
+        <button type="button" id="iniciar">Começar</button>
+        <p class="dica">Espaço, seta pra cima, W ou clique na tela pra pular</p>
+        <a class="voltar" href="pg2.html">Voltar</a>
+    </div>
+
+    <script>
+        const canvas = document.getElementById("tela");
+        const ctx = canvas.getContext("2d");
+        const pontosEl = document.getElementById("pontos");
+        const recordeEl = document.getElementById("recorde");
+        const botao = document.getElementById("iniciar");
+        const botoesNivel = document.querySelectorAll(".nivel");
+
+        const LARGURA = 400;
+        const ALTURA = 500;
+
+        // deixa o desenho nítido em telas de alta resolução
+        const dpr = window.devicePixelRatio || 1;
+        canvas.width = LARGURA * dpr;
+        canvas.height = ALTURA * dpr;
+        canvas.style.width = LARGURA + "px";
+        canvas.style.height = ALTURA + "px";
+        ctx.scale(dpr, dpr);
+        ctx.imageSmoothingQuality = "high";
+
+        // Tamanho da cara (em pixels)
+        const TAMANHO_CARA = 70;
+
+        // Foto com a asa LEVANTADA (aparece quando ela está subindo)
+        const fotoAsaCima = new Image();
+        fotoAsaCima.src = "imagens/cabeça voadora.png";
+
+        // Foto com a asa ABAIXADA (aparece quando ela está caindo)
+        const fotoAsaBaixo = new Image();
+        fotoAsaBaixo.src = "imagens/cabeça voadora pra baixo.png";
+
+        // Configuração de cada nível
+        const niveis = {
+            facil:   { velocidade: 2.2, abertura: 190, intervalo: 110 },
+            medio:   { velocidade: 2.8, abertura: 160, intervalo: 95 },
+            dificil: { velocidade: 3.5, abertura: 135, intervalo: 80 }
+        };
+
+        const GRAVIDADE = 0.45;
+        const PULO = -7.5;
+        const LARGURA_PILAR = 60;
+        const RAIO = 22; // área de batida (menor que a foto, pra ficar justo)
+
+        let nivelAtual = "facil";
+        let passaro, pilares, quadros, pontos;
+        let jogando = false;
+        let recorde = 0;
+        let ultimo = 0;
+        let acumulado = 0;
+        const PASSO = 1000 / 60;
+
+        try {
+            recorde = Number(localStorage.getItem("recordeVoaCara")) || 0;
+        } catch (e) {}
+        recordeEl.textContent = recorde;
+
+        function imagemPronta(img) {
+            return img.complete && img.naturalWidth > 0;
+        }
+
+        // escolhe qual foto mostrar: subindo = asa levantada, caindo = asa abaixada
+        function escolherImagem() {
+            const subindo = passaro.vy < 0;
+            const principal = subindo ? fotoAsaCima : fotoAsaBaixo;
+            const reserva = subindo ? fotoAsaBaixo : fotoAsaCima;
+
+            if (imagemPronta(principal)) return principal;
+            if (imagemPronta(reserva)) return reserva;
+            return null;
+        }
+
+        function reiniciarEstado() {
+            passaro = { x: 100, y: ALTURA / 2, vy: 0 };
+            pilares = [];
+            quadros = 0;
+            pontos = 0;
+            pontosEl.textContent = pontos;
+        }
+
+        function criarPilar() {
+            const config = niveis[nivelAtual];
+            const margem = 50;
+            const topo = margem + Math.random() * (ALTURA - config.abertura - margem * 2);
+            pilares.push({
+                x: LARGURA,
+                topo: topo,
+                abertura: config.abertura,
+                passou: false
+            });
+        }
+
+        function pular() {
+            if (!jogando) return;
+            passaro.vy = PULO;
+        }
+
+        function atualizar() {
+            const config = niveis[nivelAtual];
+
+            passaro.vy += GRAVIDADE;
+            passaro.y += passaro.vy;
+
+            if (quadros % config.intervalo === 0) {
+                criarPilar();
+            }
+            quadros++;
+
+            pilares.forEach(function (p) {
+                p.x -= config.velocidade;
+
+                // ponto quando passa do pilar
+                if (!p.passou && p.x + LARGURA_PILAR < passaro.x) {
+                    p.passou = true;
+                    pontos++;
+                    pontosEl.textContent = pontos;
+                }
+
+                // batida nos pilares
+                const dentroX = passaro.x + RAIO > p.x && passaro.x - RAIO < p.x + LARGURA_PILAR;
+                if (dentroX) {
+                    const batePilarCima = passaro.y - RAIO < p.topo;
+                    const batePilarBaixo = passaro.y + RAIO > p.topo + p.abertura;
+                    if (batePilarCima || batePilarBaixo) {
+                        fim();
+                    }
+                }
+            });
+
+            // tira os pilares que já saíram da tela
+            pilares = pilares.filter(function (p) {
+                return p.x + LARGURA_PILAR > 0;
+            });
+
+            // bateu no teto ou no chão
+            if (passaro.y - RAIO < 0 || passaro.y + RAIO > ALTURA) {
+                fim();
+            }
+        }
+
+        function desenharPilar(x, y, largura, altura) {
+            ctx.fillStyle = "#c2185b";
+            ctx.fillRect(x, y, largura, altura);
+
+            // faixa clara pra dar volume
+            ctx.fillStyle = "#e91e8c";
+            ctx.fillRect(x + 6, y, 10, altura);
+
+            // borda
+            ctx.strokeStyle = "#7b1048";
+            ctx.lineWidth = 3;
+            ctx.strokeRect(x, y, largura, altura);
+        }
+
+        function desenhar() {
+            ctx.clearRect(0, 0, LARGURA, ALTURA);
+
+            // pilares
+            pilares.forEach(function (p) {
+                desenharPilar(p.x, -5, LARGURA_PILAR, p.topo + 5);
+                desenharPilar(p.x, p.topo + p.abertura, LARGURA_PILAR, ALTURA - (p.topo + p.abertura) + 5);
+            });
+
+            // personagem (inclina um pouco conforme sobe ou desce)
+            const inclinacao = Math.max(-0.5, Math.min(0.8, passaro.vy * 0.06));
+            ctx.save();
+            ctx.translate(passaro.x, passaro.y);
+            ctx.rotate(inclinacao);
+
+            const imagem = escolherImagem();
+            if (imagem) {
+                ctx.drawImage(imagem, -TAMANHO_CARA / 2, -TAMANHO_CARA / 2, TAMANHO_CARA, TAMANHO_CARA);
+            } else {
+                // se as fotos não carregarem, aparece uma bolinha amarela
+                ctx.fillStyle = "#ffd54f";
+                ctx.beginPath();
+                ctx.arc(0, 0, RAIO, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            ctx.restore();
+
+            // pontos grandes no topo da tela
+            ctx.fillStyle = "white";
+            ctx.strokeStyle = "black";
+            ctx.lineWidth = 4;
+            ctx.font = "bold 40px Arial";
+            ctx.textAlign = "center";
+            ctx.strokeText(pontos, LARGURA / 2, 55);
+            ctx.fillText(pontos, LARGURA / 2, 55);
+        }
+
+        function loop(agora) {
+            if (!jogando) return;
+
+            const delta = Math.min(agora - ultimo, 100);
+            ultimo = agora;
+            acumulado += delta;
+
+            while (acumulado >= PASSO && jogando) {
+                atualizar();
+                acumulado -= PASSO;
+            }
+
+            desenhar();
+
+            if (jogando) {
+                requestAnimationFrame(loop);
+            }
+        }
+
+        function iniciar() {
+            reiniciarEstado();
+            jogando = true;
+            botao.disabled = true;
+            acumulado = 0;
+            ultimo = performance.now();
+            requestAnimationFrame(loop);
+        }
+
+        function fim() {
+            if (!jogando) return;
+            jogando = false;
+            botao.disabled = false;
+            botao.textContent = "Jogar de novo";
+            desenhar();
+
+            if (pontos > recorde) {
+                recorde = pontos;
+                recordeEl.textContent = recorde;
+                try {
+                    localStorage.setItem("recordeVoaCara", recorde);
+                } catch (e) {}
+            }
+
+            alert("Fim de jogo! Você fez " + pontos + " pontos.");
+        }
+
+        // controles
+        document.addEventListener("keydown", function (e) {
+            const tecla = e.key.toLowerCase();
+            if (e.code === "Space" || tecla === "arrowup" || tecla === "w") {
+                e.preventDefault();
+                pular();
+            }
+        });
+
+        canvas.addEventListener("mousedown", pular);
+        canvas.addEventListener("touchstart", function (e) {
+            e.preventDefault();
+            pular();
+        }, { passive: false });
+
+        botoesNivel.forEach(function (b) {
+            b.addEventListener("click", function () {
+                if (jogando) return;
+                nivelAtual = b.dataset.nivel;
+                botoesNivel.forEach(function (x) {
+                    x.classList.remove("escolhido");
+                });
+                b.classList.add("escolhido");
+            });
+        });
+
+        botao.addEventListener("click", function () {
+            botao.blur();
+            iniciar();
+        });
+
+        // tela inicial
+        reiniciarEstado();
+        fotoAsaCima.onload = desenhar;
+        fotoAsaBaixo.onload = desenhar;
+        desenhar();
+    </script>
+</body>
+</html>
